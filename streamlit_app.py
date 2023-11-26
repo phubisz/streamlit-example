@@ -1,38 +1,76 @@
 from collections import namedtuple
-import altair as alt
-import math
 import pandas as pd
 import streamlit as st
+import psycopg2
+from sshtunnel import SSHTunnelForwarder
+
 
 """
-# Welcome to Streamlit!
+# Witam!
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:
-
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
-
-In the meantime, below is an example of what you can do with just a few lines of code:
+Poniżej znajduję się aktualizowana co 1h informacja o poziomie wypełnienia ankiety.
 """
 
+server = SSHTunnelForwarder(
+    'pgsql1.small.pl',
+    ssh_username="tessali",
+    ssh_password="XLw0UPsp5WT)nTpK65Hc",
+    remote_bind_address=('pgsql1.small.pl', 5432)
+)
 
-with st.echo(code_location='below'):
-    total_points = st.slider("Number of points in spiral", 1, 5000, 2000)
-    num_turns = st.slider("Number of turns in spiral", 1, 100, 9)
 
-    Point = namedtuple('Point', 'x y')
-    data = []
+server.start()
 
-    points_per_turn = total_points / num_turns
+#print(server.local_bind_port) 
 
-    for curr_point_num in range(total_points):
-        curr_turn, i = divmod(curr_point_num, points_per_turn)
-        angle = (curr_turn + 1) * 2 * math.pi * i / points_per_turn
-        radius = curr_point_num / total_points
-        x = radius * math.cos(angle)
-        y = radius * math.sin(angle)
-        data.append(Point(x, y))
 
-    st.altair_chart(alt.Chart(pd.DataFrame(data), height=500, width=500)
-        .mark_circle(color='#0068c9', opacity=0.5)
-        .encode(x='x:Q', y='y:Q'))
+# Connect to an existing database
+conn = psycopg2.connect(host='127.0.0.1', user='p1054_test',
+                              password='47QXQ00:F.rMX.952r12E@.LwdIHv2', 
+                              dbname='p1054_test', port=server.local_bind_port)
+
+
+cur = conn.cursor()
+
+# Execute a command: this creates a new table
+#cur.execute("CREATE TABLE test (id serial PRIMARY KEY, num integer, data varchar);")
+
+# Pass data to fill a query placeholders and let Psycopg perform
+# the correct conversion (no more SQL injections!)
+#cur.execute("INSERT INTO test (num, data) VALUES (%s, %s)", (100, "abc'def"))
+
+# Query the database and obtain data as Python objects
+cur.execute("SELECT * FROM mytable;")
+results = cur.fetchall()
+
+# Make the changes to the database persistent
+conn.commit()
+
+
+columns = []
+
+for column in cur.description:
+    columns.append(column.name)
+
+# Perform query.
+#df = conn.query('SELECT * FROM baeldungauthor;', ttl="10m")
+
+
+df = pd.DataFrame(results, columns=columns) 
+
+print(df)
+
+
+cur.close()
+conn.close()
+server.stop()
+
+
+
+#st.dataframe(df)
+
+for row in df.itertuples():
+    st.write(f"{row.name} has a :{row.pet}:")
+
+
+#st.dataframe(df, hide_index=True)
